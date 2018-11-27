@@ -27,6 +27,11 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+/* list which contains mlfqs queues*/
+//MBY NASSER
+static struct list mlfqs_list;
+static int maxBurstTime;
+static float load_avg;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -44,6 +49,12 @@ struct kernel_thread_frame
     thread_func *function;      /* Function to call. */
     void *aux;                  /* Auxiliary data for function. */
   };
+//MBY NASSER
+struct mlfqsList
+{
+    int listId ;
+    struct list orderList;
+};
 
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
@@ -344,36 +355,41 @@ thread_get_priority (void)
 {
   return thread_current ()->priority;
 }
-
+// MBY NASSER
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) 
 {
+  thread_current()->nice=nice;
   /* Not yet implemented. */
 }
 
 /* Returns the current thread's nice value. */
+// MBY NASSER
+
 int
 thread_get_nice (void) 
 {
   /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
-
+// MBY NASSER
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  float avg=(59/60)*load_avg + (1/60)*list_size(&ready_list);
+  int temp = (int)(avg< 0 ? (avg - 0.5) : (avg + 0.5));
+  return temp*100;
 }
-
+// MBY NASSER
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  float recent_cpu = (2*load_avg)/(2*load_avg + 1) * thread_current()->recent_cpu + thread_current()->nice;
+  int temp = (int)(recent_cpu< 0 ? (recent_cpu - 0.5) : (recent_cpu + 0.5));
+  return temp*100;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -490,10 +506,17 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
-    return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  if(thread_mlfqs){
+//MBY NASSER
+// SHOULD IMPLEMMENT MLFQS WHERE QANTAM TIME TO COMPARE ??
+  }else{
+    // Hesham implement round robin here
+    if (list_empty (&ready_list))
+      return idle_thread;
+    else
+      return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
+
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -577,6 +600,18 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+//MBY NASSER
+/* Setting priorites for every thread */
+void set_priority_threads (void){
+  struct list_elem * start=list_begin(&all_list);
+  for (int i = 0; i <list_size(&all_list) ; i++) {
+    struct thread *t = list_entry (start, struct thread, elem);
+    float priority = PRI_MAX - (thread_current()->recent_cpu/ 4) - (thread_current()->nice * 2);
+    int temp = (int)(priority< 0 ? (priority - 0.5) : (priority + 0.5));
+    t->priority=temp;
+    start->next;
+  }
 }
 
 /* Offset of `stack' member within `struct thread'.
