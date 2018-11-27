@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <synch.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -100,6 +101,10 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    bool donatePriority; //MBY SHARAF to check if thread has donated its priority
+    struct lock waitingOnLock; //MBY SHARAF to hold the lock which it's waiting for
+    int nestedDonationPriority; //MBY SHARAF
   };
 
 /* If false (default), use round-robin scheduler.
