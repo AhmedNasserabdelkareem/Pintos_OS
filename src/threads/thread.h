@@ -101,6 +101,8 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+    int nice;
+    float recent_cpu;
 
     bool donatePriority; //MBY SHARAF to check if thread has donated its priority
     struct lock waitingOnLock; //MBY SHARAF to hold the lock which it's waiting for
@@ -142,5 +144,6 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+void set_priority_threads(void);
 
 #endif /* threads/thread.h */
