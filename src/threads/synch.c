@@ -34,8 +34,8 @@
 
 //MBY SHARAF
 bool prioritySort(const struct list_elem *a, const struct list_elem *b, void *aux) {
-    struct thread *newThread = (struct thread *) a;
-    struct thread *listThread = (struct thread *) b;
+    struct thread *newThread = list_entry(a, struct thread, elem);
+    struct thread *listThread = list_entry(b, struct thread, elem);
 
     if (newThread->priority < listThread->priority)
         return true;
@@ -43,8 +43,19 @@ bool prioritySort(const struct list_elem *a, const struct list_elem *b, void *au
     return false;
 }
 
+//MBY SHARAF
+bool get_max_denoted_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
+    struct priorityAddress *first = list_entry(a, struct priorityAddress, elem);
+    struct priorityAddress *second = list_entry(b, struct priorityAddress, elem);
+
+    if (&first->address < &second->address)
+        return true;
+
+    return false;
+}
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
-   nonnegative integer along with two atomic operators for
+   nonnegative intestruct priorityAddressger along with two atomic operators for
    manipulating it:
 
    - down or "P": wait for the value to become positive, then
@@ -199,18 +210,26 @@ lock_acquire(struct lock *lock) {
     ASSERT (!lock_held_by_current_thread(lock));
 
     //MBY SHARAF
-    //if lock != null -> it's hold by another thread
-    if (lock->holder != NULL && lock->holder->priority < thread_get_priority()) {
+    thread_current()->originalPriority = thread_get_priority();
+
+    if (lock->holder == NULL) {//lock is free no thread is holding it
+        list_init(&thread_current()->donatedPriorities);
+
+    } else if (lock->holder->priority < thread_get_priority()) {
         thread_current()->waitingOnLock = lock;
+        lock->holder->priority = thread_get_priority();
+        //lock->lockPriority = thread_get_priority_address();
+        struct priorityAddress pri = {.address = thread_current()->priorityAddress};
+        list_push_back(&lock->holder->donatedPriorities, &pri.elem);
 
         //TODO case of -mlfqs if true !!!!
-        lock->holder->priority += thread_current()->priority;
-        thread_current()->donatePriority = true;
 
-        struct thread *parentLock = lock->holder->waitingOnLock.holder;
-        for (int i = 0; i < 8 && parentLock != NULL; ++i) {
-            parentLock->nestedDonationPriority += thread_current()->priority;
-            parentLock = parentLock->waitingOnLock.holder;
+        struct lock *parentLock = lock->holder->waitingOnLock;
+
+        for (int i = 0; i < 8 && parentLock->holder != NULL; ++i) {
+            struct thread *lockHolder = parentLock->holder;
+            lockHolder->priority = thread_get_priority();
+            parentLock = lockHolder->waitingOnLock;
         }
     }
 
@@ -248,17 +267,37 @@ lock_release(struct lock *lock) {
     ASSERT (lock_held_by_current_thread(lock));
 
     //MBY SHARAF
-    thread_set_priority(thread_get_priority() - thread_current()->nestedDonationPriority);
-    thread_current()->nestedDonationPriority = 0;
-    struct list_elem *currentNode = lock->semaphore.waiters.head;
-    while (currentNode != NULL) {
-        if (((struct thread *) currentNode)->donatePriority) {
-            thread_set_priority(thread_get_priority() - ((struct thread *) currentNode)->priority);
-            ((struct thread *) currentNode)->donatePriority = false;
+
+    struct list_elem *currentWaitingThread = &lock->semaphore.waiters.head;
+
+    while (currentWaitingThread != NULL) {
+        struct thread *th = list_entry(currentWaitingThread, struct thread, elem);
+        struct list_elem *priorityElem = &lock->holder->donatedPriorities.head;
+        while (priorityElem != NULL) {
+
+            struct priorityAddress *pri = list_entry(priorityElem, struct priorityAddress, elem);
+
+            if (pri->address == th->priorityAddress) {
+                list_remove(priorityElem);
+                break;
+            }
+
+            priorityElem = list_next(priorityElem);
         }
-        currentNode = currentNode->next;
+        currentWaitingThread = list_next(currentWaitingThread);
     }
+
+    if (list_empty(&lock->holder->donatedPriorities)) {
+        lock->holder->priority = lock->holder->originalPriority;
+    } else {
+        struct priorityAddress pri = *list_entry(list_max(&lock->holder->donatedPriorities, get_max_denoted_priority, NULL),
+                struct priorityAddress, elem);
+
+        lock->holder->priority = *pri.address;
+    }
+
     thread_current()->waitingOnLock = NULL;
+    //MBY end of modification
 
     lock->holder = NULL;
     sema_up(&lock->semaphore);

@@ -355,6 +355,7 @@ thread_get_priority (void)
 {
   return thread_current ()->priority;
 }
+
 // MBY NASSER
 /* Sets the current thread's nice value to NICE. */
 void
@@ -479,6 +480,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->priorityAddress = &t->priority;//MBY SHARAF
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
