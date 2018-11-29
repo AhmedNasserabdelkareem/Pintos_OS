@@ -96,7 +96,7 @@ struct list_elem
 /* List. */
 struct list 
   {
-    struct thread head;      /* List head. */
+    struct list_elem head;      /* List head. */
     struct list_elem tail;      /* List tail. */
   };
 
