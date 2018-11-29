@@ -4,16 +4,15 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include <synch.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
-enum thread_status
-  {
+enum thread_status {
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING        /* About to be destroyed. */
-  };
+};
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */

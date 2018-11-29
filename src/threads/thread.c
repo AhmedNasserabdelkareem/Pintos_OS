@@ -4,7 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
-#include <devices/timer.h>
+#include "devices/timer.h"
 #include "malloc.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
@@ -58,12 +58,12 @@ static struct thread *initial_thread;
 static struct lock tid_lock;
 
 /* Stack frame for kernel_thread(). */
-struct kernel_thread_frame 
-  {
+struct kernel_thread_frame
+{
     void *eip;                  /* Return address. */
     thread_func *function;      /* Function to call. */
     void *aux;                  /* Auxiliary data for function. */
-  };
+};
 //MBY NASSER
 struct mlfqsList
 {
@@ -347,7 +347,7 @@ thread_current (void)
 
 /* Returns the running thread's tid. */
 tid_t
-thread_tid (void) 
+thread_tid (void)
 {
   return thread_current ()->tid;
 }
@@ -423,7 +423,6 @@ thread_get_priority (void)
 {
   return thread_current ()->priority;
 }
-
 // MBY NASSER
 /* Sets the current thread's nice value to NICE. */
 void
@@ -556,6 +555,25 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   t->priorityAddress = &t->priority;//MBY SHARAF
+    memset (t, 0, sizeof *t);
+    t->status = THREAD_BLOCKED;
+    strlcpy (t->name, name, sizeof t->name);
+    t->stack = (uint8_t *) t + PGSIZE;
+    t->priority = priority;
+    t->magic = THREAD_MAGIC;
+    //MBY NASSER
+    if(thread_mlfqs) {
+    //    if (running_thread() == initial_thread) {
+    if(t==initial_thread){
+        t->recent_cpu=0;
+        } else {
+        t->recent_cpu=thread_get_recent_cpu();
+        }
+        t->nice=0;
+        float initPriority = PRI_MAX - (thread_current()->recent_cpu/ 4) - (thread_current()->nice * 2);
+        int temp = (int)(initPriority< 0 ? (initPriority - 0.5) : (initPriority + 0.5));
+    t->priority=temp;
+    }
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -681,14 +699,14 @@ allocate_tid (void)
 //MBY NASSER
 /* Setting priorites for every thread */
 void set_priority_threads (void){
-  struct list_elem * start=list_begin(&all_list);
-  for (int i = 0; i <list_size(&all_list) ; i++) {
-    struct thread *t = list_entry (start, struct thread, elem);
-    float priority = PRI_MAX - (thread_current()->recent_cpu/ 4) - (thread_current()->nice * 2);
-    int temp = (int)(priority< 0 ? (priority - 0.5) : (priority + 0.5));
-    t->priority=temp;
-    start->next;
-  }
+    struct list_elem * start=list_begin(&all_list);
+    for (int i = 0; i <list_size(&all_list) ; i++) {
+        struct thread *t = list_entry (start, struct thread, elem);
+        float priority = PRI_MAX - (thread_current()->recent_cpu/ 4) - (thread_current()->nice * 2);
+        int temp = (int)(priority< 0 ? (priority - 0.5) : (priority + 0.5));
+        t->priority=temp;
+        start->next;
+    }
 }
 
 /* Offset of `stack' member within `struct thread'.
