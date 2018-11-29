@@ -4,6 +4,8 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <devices/timer.h>
+#include "malloc.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -19,7 +21,15 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
-
+//mby ABDELRAHMAN
+/*the node of the list to carry the sleeping threads sorted
+in ascending order to check only the first element in each tick*/
+static struct sleeping_thread_node{
+    struct thread* value;//the blocked waiting thread
+    struct sleeping_thread_node* next; // the next node in the lists
+    int64_t ticks; //number of ticks to wait
+    int64_t start; //start sleeping time
+};
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -27,6 +37,11 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+
+//mby ABDELRAHMAN
+/*the head of sleeping nodes sorted list,
+to be checked each tick*/
+static struct sleeping_thread_node* sleaping_list;
 /* list which contains mlfqs queues*/
 //MBY NASSER
 static struct list mlfqs_list;
@@ -100,15 +115,20 @@ thread_init (void)
 {
   ASSERT (intr_get_level () == INTR_OFF);
 
-  lock_init (&tid_lock);
-  list_init (&ready_list);
-  list_init (&all_list);
+    lock_init (&tid_lock);
+    list_init (&ready_list);
+    list_init (&all_list);
+    sleaping_list=NULL;//mby ABDELRAHMAN initialize the initial node with null
 
-  /* Set up a thread structure for the running thread. */
-  initial_thread = running_thread ();
-  init_thread (initial_thread, "main", PRI_DEFAULT);
-  initial_thread->status = THREAD_RUNNING;
-  initial_thread->tid = allocate_tid ();
+    /* Set up a thread structure for the running thread. */
+    initial_thread = running_thread ();
+    init_thread (initial_thread, "main", PRI_DEFAULT);
+    initial_thread->status = THREAD_RUNNING;
+    initial_thread->tid = allocate_tid ();
+    //MBY NASSER
+    // initialize load_avg
+     load_avg=0;
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -128,12 +148,31 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
+//mby ABDELRAHMAN
+/*the function to check the least sleeping thread
+and move it to ready list when done sleeping*/
+void check_sleeping_threads(){
+    if(sleaping_list!=NULL){
+        while(sleaping_list->ticks-timer_elapsed(sleaping_list->next->start)<=0){//can be changed to if . that implies one move(from blocked to ready) per tick
+            thread_unblock(sleaping_list->value);//unLock the thread (adding it to the ready list)
+            struct sleeping_thread_node* temp = sleaping_list;
+            sleaping_list = sleaping_list->next;//move the pointer to next value (NULL is ok since it's initial value is NULL)
+            free(temp);// free the allocated space
+        }
+    }
+}
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
 thread_tick (void) 
 {
-  struct thread *t = thread_current ();
+
+//mby ABDELRAHMAN
+/*check the least sleeping thread in cnstant time
+and unlock it if done*/
+    check_sleeping_threads();
+
+    struct thread *t = thread_current ();
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -162,14 +201,12 @@ thread_print_stats (void)
    PRIORITY, which executes FUNCTION passing AUX as the argument,
    and adds it to the ready queue.  Returns the thread identifier
    for the new thread, or TID_ERROR if creation fails.
-
    If thread_start() has been called, then the new thread may be
    scheduled before thread_create() returns.  It could even exit
    before thread_create() returns.  Contrariwise, the original
    thread may run for any amount of time before the new thread is
    scheduled.  Use a semaphore or some other form of
    synchronization if you need to ensure ordering.
-
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
@@ -217,7 +254,6 @@ thread_create (const char *name, int priority,
 
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
-
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
@@ -231,6 +267,36 @@ thread_block (void)
   schedule ();
 }
 
+//mby ABDELRAHMAN
+/*add the sleeping thread to the sleeping sorted list and block it*/
+void thread_sleep(int64_t start, int64_t ticks){
+//allocate and initialize node
+    struct sleeping_thread_node* node = malloc(sizeof(struct sleeping_thread_node));
+    node->value = thread_current();
+    node->start = start;
+    node->ticks=ticks;
+//add it to the list in position
+    if(sleaping_list == NULL){
+        sleaping_list = node;
+    }else{
+        struct sleeping_thread_node* current=sleaping_list;
+        while(true){
+            if(current->next==NULL){
+                current->next = node;
+                node->next = NULL;
+                break;
+            }else if(current->next->ticks-timer_elapsed(current->next->start)>node->ticks){
+                node->next  = current->next;
+                current->next = node;
+                break;
+            }else{
+                current = current->next;
+            }
+        }
+    }
+//block it
+    thread_block();
+}
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -346,7 +412,9 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+    if(thread_mlfqs){
+        return;
+    }
 }
 
 /* Returns the current thread's priority. */
@@ -359,10 +427,17 @@ thread_get_priority (void)
 // MBY NASSER
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice UNUSED)
 {
-  thread_current()->nice=nice;
-  /* Not yet implemented. */
+    //MBY NASSER
+    if(thread_mlfqs) {
+        thread_current()->nice=nice;
+        //TODO Should recalculate Prorities based on new nice
+        float currentPriority = PRI_MAX - (thread_current()->recent_cpu / 4) - (thread_current()->nice * 2);
+        int temp = (int) (currentPriority < 0 ? (currentPriority - 0.5) : (currentPriority + 0.5));
+        thread_current()->priority = temp;
+    }
+    /* Not yet implemented. */
 }
 
 /* Returns the current thread's nice value. */
@@ -379,20 +454,20 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  float avg=(59/60)*load_avg + (1/60)*list_size(&ready_list);
-  int temp = (int)(avg< 0 ? (avg - 0.5) : (avg + 0.5));
-  return temp*100;
+   // float avg=(59/60)*load_avg + (1/60)*list_size(&ready_list);
+    int temp = (int)(load_avg< 0 ? (load_avg - 0.5) : (load_avg + 0.5));
+    return temp*100;
 }
 // MBY NASSER
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  float recent_cpu = (2*load_avg)/(2*load_avg + 1) * thread_current()->recent_cpu + thread_current()->nice;
-  int temp = (int)(recent_cpu< 0 ? (recent_cpu - 0.5) : (recent_cpu + 0.5));
-  return temp*100;
+   // float recent_cpu = (2*load_avg)/(2*load_avg + 1) * thread_current()->recent_cpu + thread_current()->nice;
+    int temp = (int)(thread_current()->recent_cpu< 0 ? (thread_current()->recent_cpu - 0.5) : (thread_current()->recent_cpu + 0.5));
+    return temp*100;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by

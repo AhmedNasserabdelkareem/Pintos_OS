@@ -4,15 +4,16 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "threads/synch.h"
+#include <synch.h>
 
 /* States in a thread's life cycle. */
-enum thread_status {
+enum thread_status
+  {
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING        /* About to be destroyed. */
-};
+  };
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
@@ -125,15 +126,12 @@ typedef void thread_func(void *aux);
 
 tid_t thread_create(const char *name, int priority, thread_func *, void *);
 
-void thread_block(void);
-
-void thread_unblock(struct thread *);
-
-struct thread *thread_current(void);
-
-tid_t thread_tid(void);
-
-const char *thread_name(void);
+void thread_block (void);
+void thread_unblock (struct thread *);
+void thread_sleep(int64_t start, int64_t ticks);
+struct thread *thread_current (void);
+tid_t thread_tid (void);
+const char *thread_name (void);
 
 void thread_exit(void) NO_RETURN;
 
@@ -144,11 +142,8 @@ typedef void thread_action_func(struct thread *t, void *aux);
 
 void thread_foreach(thread_action_func *, void *);
 
-int thread_get_priority(void);
-
-//int* thread_get_priority_address(void);
-
-void thread_set_priority(int);
+int thread_get_priority (void);
+void thread_set_priority (int);
 
 int thread_get_nice(void);
 
