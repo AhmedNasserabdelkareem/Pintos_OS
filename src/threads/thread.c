@@ -4,6 +4,8 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <devices/timer.h>
+#include "malloc.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -19,7 +21,15 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
-
+//mby ABDELRAHMAN
+/*the node of the list to carry the sleeping threads sorted
+in ascending order to check only the first element in each tick*/
+static struct sleeping_thread_node{
+    struct thread* value;//the blocked waiting thread
+    struct sleeping_thread_node* next; // the next node in the lists
+    int64_t ticks; //number of ticks to wait
+    int64_t start; //start sleeping time
+};
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -27,6 +37,11 @@ static struct list ready_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
+
+//mby ABDELRAHMAN
+/*the head of sleeping nodes sorted list,
+to be checked each tick*/
+static struct sleeping_thread_node* sleaping_list;
 /* list which contains mlfqs queues*/
 //MBY NASSER
 static struct list mlfqs_list;
@@ -100,6 +115,7 @@ thread_init (void)
     lock_init (&tid_lock);
     list_init (&ready_list);
     list_init (&all_list);
+    sleaping_list=NULL;//mby ABDELRAHMAN initialize the initial node with null
 
     /* Set up a thread structure for the running thread. */
     initial_thread = running_thread ();
@@ -129,11 +145,30 @@ thread_start (void)
     sema_down (&idle_started);
 }
 
+//mby ABDELRAHMAN
+/*the function to check the least sleeping thread
+and move it to ready list when done sleeping*/
+void check_sleeping_threads(){
+    if(sleaping_list!=NULL){
+        while(sleaping_list->ticks-timer_elapsed(sleaping_list->next->start)<=0){//can be changed to if . that implies one move(from blocked to ready) per tick
+            thread_unblock(sleaping_list->value);//unLock the thread (adding it to the ready list)
+            struct sleeping_thread_node* temp = sleaping_list;
+            sleaping_list = sleaping_list->next;//move the pointer to next value (NULL is ok since it's initial value is NULL)
+            free(temp);// free the allocated space
+        }
+    }
+}
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
 thread_tick (void)
 {
+
+//mby ABDELRAHMAN
+/*check the least sleeping thread in cnstant time
+and unlock it if done*/
+    check_sleeping_threads();
+
     struct thread *t = thread_current ();
 
     /* Update statistics. */
@@ -229,6 +264,36 @@ thread_block (void)
     schedule ();
 }
 
+//mby ABDELRAHMAN
+/*add the sleeping thread to the sleeping sorted list and block it*/
+void thread_sleep(int64_t start, int64_t ticks){
+//allocate and initialize node
+    struct sleeping_thread_node* node = malloc(sizeof(struct sleeping_thread_node));
+    node->value = thread_current();
+    node->start = start;
+    node->ticks=ticks;
+//add it to the list in position
+    if(sleaping_list == NULL){
+        sleaping_list = node;
+    }else{
+        struct sleeping_thread_node* current=sleaping_list;
+        while(true){
+            if(current->next==NULL){
+                current->next = node;
+                node->next = NULL;
+                break;
+            }else if(current->next->ticks-timer_elapsed(current->next->start)>node->ticks){
+                node->next  = current->next;
+                current->next = node;
+                break;
+            }else{
+                current = current->next;
+            }
+        }
+    }
+//block it
+    thread_block();
+}
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)

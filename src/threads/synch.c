@@ -201,7 +201,7 @@ lock_acquire(struct lock *lock) {
     //MBY SHARAF
     //if lock != null -> it's hold by another thread
     if (lock->holder != NULL && lock->holder->priority < thread_get_priority()) {
-        thread_current()->waitingOnLock = lock;
+       //mby thread_current()->waitingOnLock = lock;
 
         //TODO case of -mlfqs if true !!!!
         lock->holder->priority += thread_current()->priority;
@@ -250,7 +250,7 @@ lock_release(struct lock *lock) {
     //MBY SHARAF
     thread_set_priority(thread_get_priority() - thread_current()->nestedDonationPriority);
     thread_current()->nestedDonationPriority = 0;
-    struct list_elem *currentNode = lock->semaphore.waiters.head;
+   struct list_elem *currentNode = &lock->semaphore.waiters.head;//mby abdo added &
     while (currentNode != NULL) {
         if (((struct thread *) currentNode)->donatePriority) {
             thread_set_priority(thread_get_priority() - ((struct thread *) currentNode)->priority);
@@ -258,7 +258,7 @@ lock_release(struct lock *lock) {
         }
         currentNode = currentNode->next;
     }
-    thread_current()->waitingOnLock = NULL;
+    //mby thread_current()->waitingOnLock = NULL;
 
     lock->holder = NULL;
     sema_up(&lock->semaphore);

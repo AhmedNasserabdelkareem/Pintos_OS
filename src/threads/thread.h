@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include <synch.h>
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -125,7 +125,7 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
-
+void thread_sleep(int64_t start, int64_t ticks);
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
