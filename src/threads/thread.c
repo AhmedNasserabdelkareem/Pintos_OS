@@ -40,6 +40,8 @@ static struct list ready_list;
 static struct list all_list;
 
 //mby ABDELRAHMAN
+struct lock blocking_lock;
+//mby ABDELRAHMAN
 /*the head of sleeping nodes sorted list,
 to be checked each tick*/
 static struct sleeping_thread_node *sleaping_list;
@@ -125,7 +127,7 @@ thread_init(void) {
     list_init(&ready_list);
     list_init(&all_list);
     sleaping_list = NULL;//mby ABDELRAHMAN initialize the initial node with null
-
+   // lock_init(&blocking_lock);
     /* Set up a thread structure for the running thread. */
     initial_thread = running_thread();
     init_thread(initial_thread, "main", PRI_DEFAULT);
@@ -160,7 +162,9 @@ void check_sleeping_threads() {
     if (sleaping_list != NULL) {
         while (sleaping_list->ticks - timer_elapsed(sleaping_list->next->start) <=
                0) {//can be changed to if . that implies one move(from blocked to ready) per tick
+          //  lock_acquire(&blocking_lock);
             thread_unblock(sleaping_list->value);//unLock the thread (adding it to the ready list)
+          //  lock_release(&blocking_lock);
             struct sleeping_thread_node *temp = sleaping_list;
             sleaping_list = sleaping_list->next;//move the pointer to next value (NULL is ok since it's initial value is NULL)
             free(temp);// free the allocated space
@@ -298,7 +302,11 @@ void thread_sleep(int64_t start, int64_t ticks) {
         }
     }
 //block it
+ //  lock_acquire(&blocking_lock);
+    intr_disable();
     thread_block();
+  // lock_release(&blocking_lock);
+
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
