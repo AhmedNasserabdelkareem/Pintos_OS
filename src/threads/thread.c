@@ -325,11 +325,32 @@ thread_unblock(struct thread *t) {
 
     old_level = intr_disable();
     ASSERT (t->status == THREAD_BLOCKED);
-    list_push_back(&ready_list, &t->elem);
-    t->status = THREAD_READY;
-    intr_set_level(old_level);
-}
 
+    //MBY Hesham   check if the unblocked thread.priority > the running thread
+    struct thread *the_running_thread = thread_current();
+
+    if (t->priority > the_running_thread->priority) {
+
+        /* push the unblocked high proirity to the front of the ready queue then yield
+           the running thread which mean the schedule function will choose a thread instead of the running
+           which would be the   unblocked high proirity */
+
+        intr_set_level(old_level);
+        list_push_front(&ready_list, &t->elem);
+        t->status = THREAD_READY;
+        intr_set_level(old_level);
+        thread_yield();
+
+
+    } else {
+
+        // MBY  end of hesham's work here
+
+        list_push_back(&ready_list, &t->elem);
+        t->status = THREAD_READY;
+        intr_set_level(old_level);
+    }
+}
 /* Returns the name of the running thread. */
 const char *
 thread_name(void) {
@@ -413,12 +434,27 @@ thread_foreach(thread_action_func *func, void *aux) {
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
+/* Mby hesham
+/* modify the priority with the new priority
+ * and if the new priority isn't the highest priority any more
+ * exchange this thread with the highest and put it in the ready queue*/
 void
 thread_set_priority(int new_priority) {
     if (thread_mlfqs) {
         return;
     }
+
+
+    thread_current ()->priority = new_priority;
+    struct thread *the_running_thread = thread_current();
+    struct thread *the_idle_ready_thread = next_thread_to_run();
+    if(the_running_thread->priority < the_idle_ready_thread){
+        thread_yield();
+    }
+
+
 }
+//Mby hesham  end of work
 
 /* Returns the current thread's priority. */
 int
