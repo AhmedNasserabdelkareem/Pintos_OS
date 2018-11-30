@@ -270,7 +270,7 @@ lock_release(struct lock *lock) {
 
     struct list_elem *currentWaitingThread = &lock->semaphore.waiters.head;
 
-    while (currentWaitingThread != NULL) {
+    while (currentWaitingThread != NULL && !list_empty(&lock->holder->donatedPriorities)) {
         struct thread *th = list_entry(currentWaitingThread, struct thread, elem);
         struct list_elem *priorityElem = &lock->holder->donatedPriorities.head;
         while (priorityElem != NULL) {
@@ -278,19 +278,26 @@ lock_release(struct lock *lock) {
             struct priorityAddress *pri = list_entry(priorityElem, struct priorityAddress, elem);
 
             if (pri->address == th->priorityAddress) {
-                list_remove(priorityElem);
+                if (list_head(&lock->holder->donatedPriorities) == priorityElem) {
+                    list_pop_front(&lock->holder->donatedPriorities);
+                } else if (list_tail(&lock->holder->donatedPriorities) == priorityElem) {
+                    list_pop_back(&lock->holder->donatedPriorities);
+                } else {
+                    list_remove(priorityElem);
+                }
                 break;
             }
 
-            priorityElem = list_next(priorityElem);
+            priorityElem = priorityElem->next;
         }
-        currentWaitingThread = list_next(currentWaitingThread);
+        currentWaitingThread = currentWaitingThread->next;
     }
 
     if (list_empty(&lock->holder->donatedPriorities)) {
         lock->holder->priority = lock->holder->originalPriority;
     } else {
-        struct priorityAddress pri = *list_entry(list_max(&lock->holder->donatedPriorities, get_max_denoted_priority, NULL),
+        struct priorityAddress pri = *list_entry(
+                list_max(&lock->holder->donatedPriorities, get_max_denoted_priority, NULL),
                 struct priorityAddress, elem);
 
         lock->holder->priority = *pri.address;

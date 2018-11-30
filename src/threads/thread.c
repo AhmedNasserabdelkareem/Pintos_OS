@@ -679,8 +679,7 @@ void set_priority_threads(void) {
         //MBY FIX
         //int temp = (int) (priority < 0 ? (priority - 0.5) : (priority + 0.5));
         //t->priority = temp;
-        //start->next;
-        start = list_next(start);
+        start->next;
     }
 }
 
